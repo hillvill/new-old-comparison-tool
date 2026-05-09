@@ -3,7 +3,7 @@
 法務・総務担当者のための、ブラウザで完結する新旧対照表作成ツールです。
 Wordファイル（.docx）を2つ読み込ませるだけで、精度の高い新旧対照表を自動生成します。
 
-👉 **[今すぐツールを使う（ブラウザで起動）]([https://hillvill.github.io/new-old-comparison-tool/]))**
+👉 **[今すぐツールを使う（ブラウザで起動）](https://hillvill.github.io/new-old-comparison-tool/)**
 
 ## 💡 特徴 (Features)
 
