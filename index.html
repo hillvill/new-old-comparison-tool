@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新旧対照表作成ツール</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/diff@5.1.0/dist/diff.min.js"></script>
+    <style>
+        /* --- 全体・背景 --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
+            background-color: #F1F5F9;
+            margin: 0;
+            padding: 0;
+            color: #334155;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* --- ヘッダーバー --- */
+        .header-bar {
+            background-color: #0F172A;
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .header-title {
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+        .version-badge {
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background-color: rgba(255,255,255,0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 32px 24px; flex: 1; }
+        
+        /* --- カード --- */
+        .card { background: #FFFFFF; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); margin-bottom: 24px; border: 1px solid #E2E8F0; }
+        
+        /* --- STEPタイトルのデザイン --- */
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            color: #0F172A;
+            font-weight: 700;
+        }
+        .step-badge {
+            border: 1px solid #0F172A;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 15px;
+            letter-spacing: 1px;
+        }
+        .step-title {
+            font-size: 18px;
+            margin: 0;
+        }
+        
+        .description { color: #475569; margin-bottom: 24px; line-height: 1.6; }
+
+        /* --- 3列グリッドと三角形 --- */
+        .header-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+            align-items: center;
+        }
+        .triangle-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 26px;
+        }
+        .triangle-icon {
+            width: 0;
+            height: 0;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+            border-left: 14px solid #CBD5E1;
+        }
+
+        /* --- 説明文カードのグリッドレイアウト --- */
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 32px;
+        }
+        .info-title { font-size: 18px; color: #0F172A; margin-top: 0; margin-bottom: 16px; border-bottom: 2px solid #E2E8F0; padding-bottom: 8px; font-weight: 700; }
+        .info-subtitle { font-size: 15px; color: #0F172A; margin-top: 0; margin-bottom: 8px; font-weight: 700; }
+        .info-left p { color: #475569; line-height: 1.7; font-size: 15px; margin-bottom: 16px; }
+        .info-right { display: flex; flex-direction: column; gap: 16px; }
+        .info-box { background-color: #F8FAFC; border: 1px solid #E2E8F0; padding: 20px; border-radius: 8px; }
+        .info-box p { color: #475569; font-size: 13px; line-height: 1.6; margin: 0; }
+        .info-list { margin: 8px 0 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.6; }
+        .info-list code { background: #E2E8F0; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+
+        @media (max-width: 768px) {
+            .header-grid { grid-template-columns: 1fr; gap: 8px; }
+            .triangle-wrapper { margin-top: 8px; margin-bottom: 4px; transform: rotate(90deg); }
+            .info-grid { grid-template-columns: 1fr; gap: 24px; }
+        }
+
+        .input-group { display: flex; flex-direction: column; }
+        label { font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 8px; }
+        .text-input { border: none; border-bottom: 2px solid #CBD5E1; padding: 8px 0; font-size: 16px; outline: none; transition: 0.3s; background-color: transparent; }
+        .text-input:focus { border-bottom: 2px solid #2563EB; }
+        .settings-area { background-color: #F8FAFC; padding: 16px; border-radius: 8px; margin-bottom: 24px; border: 1px solid #E2E8F0; }
+        
+        /* --- ボタン関連 --- */
+        .btn {
+            background-color: #475569; /* スレートグレー */
+            color: white;
+            border: 1px solid transparent;
+            padding: 11px 24px;
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .btn:hover { background-color: #334155; }
+        
+        .btn-success {
+            background-color: #2563EB; /* クールブルー */
+        }
+        .btn-success:hover { background-color: #1D4ED8; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2); }
+        
+        .btn-outline {
+            background-color: #ffffff;
+            color: #0F172A;
+            border: 1px solid #0F172A;
+            box-shadow: none;
+        }
+        .btn-outline:hover { background-color: #F1F5F9; }
+
+        .action-buttons { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 24px; }
+
+        /* 警告アラート */
+        .alert-warning { background-color: #FEF3C7; color: #92400E; padding: 16px; border-left: 4px solid #F59E0B; margin-bottom: 24px; border-radius: 4px; font-weight: bold; display: none; }
+
+        /* ヒントメッセージ用 */
+        .suggestion-item {
+            background-color: #F0F9FF; /* 淡いブルー */
+            color: #0369A1; /* 濃いブルー */
+            padding: 16px;
+            border-left: 4px solid #0EA5E9;
+            margin-top: 16px;
+            border-radius: 8px; /* カードに合わせて丸みを持たせる */
+            font-size: 14px;
+            line-height: 1.6;
+            box-shadow: 0 2px 4px -1px rgba(0,0,0,0.05); /* 枠外用の軽い影 */
+        }
+        
+        /* テーブルスタイル */
+        table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6; }
+        th, td { border: 1px solid #E2E8F0; padding: 12px; vertical-align: top; }
+        th { background-color: #F8FAFC; font-weight: 600; text-align: left; color: #0F172A; }
+        .col-num { width: 5%; text-align: center; white-space: nowrap; }
+        .col-text { width: 36%; }
+        
+        .col-type { width: 8%; text-align: center; }
+        td.col-type { font-weight: bold; }
+        
+        .ins { color: #2563EB; font-weight: bold; } 
+        .del { text-decoration: underline; color: #DC2626; } 
+        .type-new { color: #2563EB; } 
+        .type-mod { color: #DC2626; } 
+        .type-keep { color: #0F172A; }
+        .type-del { color: #DC2626; } 
+        
+        select.mapping-select { width: 100%; padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; transition: 0.2s; outline: none; }
+        select.mapping-select:focus { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        select.mapping-select.changed { border-color: #0F172A; background-color: #F1F5F9; }
+        select.mapping-select.duplicate { border-color: #F59E0B; background-color: #FEF3C7; font-weight: bold; color: #B45309; }
+
+        .step-section { display: none; }
+        .step-section.active { display: block; animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        #copyToast { display: none; color: #059669; font-weight: bold; }
+
+        /* --- フッター --- */
+        footer {
+            padding: 24px;
+            text-align: center;
+            font-size: 13px;
+            color: #64748B;
+            border-top: 1px solid #E2E8F0;
+            background: #fff;
+            line-height: 1.8;
+            margin-top: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header-bar">
+    <div class="header-title">新旧対照表作成ツール</div>
+    <div class="version-badge">V1 (BETA)</div>
+</div>
+
+<div class="container">
+    <div id="step1" class="step-section active">
+        <div class="card">
+            <div class="step-header">
+                <span class="step-badge">STEP 1</span>
+                <h2 class="step-title">ファイルの選択</h2>
+            </div>
+            <p class="description">2ステップで精度の高い新旧対照表が作成できます。比較するWordファイル（.docx）を選択してください。</p>
+            
+            <div class="header-grid">
+                <div class="input-group">
+                    <label>1. 【旧版】のWordファイル</label>
+                    <input type="file" id="oldFile" accept=".docx" class="text-input">
+                </div>
+                <div class="triangle-wrapper">
+                    <div class="triangle-icon"></div>
+                </div>
+                <div class="input-group">
+                    <label>2. 【新版】のWordファイル</label>
+                    <input type="file" id="newFile" accept=".docx" class="text-input">
+                </div>
+            </div>
+
+            <div class="settings-area">
+                <div class="input-group">
+                    <label>項の番号スタイル | 書式に合わせたものを選択してください</label>
+                    <select id="paraStyle" class="text-input" style="background-color: white;">
+                        <option value="arabic">算用数字（項番号表記が「2 」「2.」など）</option>
+                        <option value="circled">丸囲み数字（項番号表記が「②」など）</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-success" onclick="startMapping()">条文を解析</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="info-grid">
+                <div class="info-left">
+                    <h3 class="info-title">｜利用方法</h3>
+                    <p>契約書や社内規程の新旧対照表を自動で作成します。「第○条（条項タイトル） 甲は、～」といった形式のドキュメントについて、項単位での緻密な比較が可能です。</p>
+                    <p>ファイル選択後に自動で新旧条文の対照（マッピング）が行われます。内容を確認・調整して実行すると、追加変更された部分は赤字に、変更前の文字には下線が引かれた対照表が生成されます。</p>
+                    <p>完成した表はボタン一つでコピーできます。ExcelやWordに貼り付け、自由にレイアウトを整えてご利用ください。</p>
+                </div>
+                <div class="info-right">
+                    <div class="info-box">
+                        <h4 class="info-subtitle">🔒 セキュリティ（完全ローカル処理）</h4>
+                        <p>本ツールは、選択されたWordファイルをサーバーへアップロードせず、利用者のブラウザ内で解析・比較処理を行います。処理結果はブラウザのページ上に表示されます。</p>
+                        
+                        <h4 class="info-subtitle" style="margin-top: 18px;">⚙️ Credits / Used OSS</h4>
+                        <p>高度な解析のために、以下のオープンソースライブラリを使用しています。</p>
+                        <ul class="info-list">
+                            <li>Word構造解析：<code>mammoth.js</code></li>
+                            <li>差分抽出エンジン：<code>jsdiff</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="step2" class="step-section">
+        <div class="card">
+            <div class="step-header">
+                <span class="step-badge">STEP 2</span>
+                <h2 class="step-title">マッピング（条文紐づけ）</h2>
+            </div>
+            <p class="description">システムが自動で新旧の条文を紐付けました。ズレがある場合は右側のドロップダウンから修正してください。</p>
+            
+            <div id="duplicateWarning" class="alert-warning">
+                ⚠️ 同じ旧条文が複数の新条文に紐づいています。正しい組み合わせか確認してください。
+            </div>
+
+            <div id="mappingArea"></div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-outline" onclick="backToStep1()">戻る</button>
+                <button class="btn btn-success" onclick="generateFinalTable()">対照表を作成する</button>
+            </div>
+        </div>
+        <!-- ヒント表示エリア（カード外） -->
+        <div id="suggestionArea"></div>
+    </div>
+
+    <div id="step3" class="step-section">
+        <div class="card">
+            <div class="step-header">
+                <span class="step-badge">COMPLETE</span>
+                <h2 class="step-title">新旧対照表</h2>
+            </div>
+            <p class="description">新旧対照表を作成しました。表をコピーしてExcelやWordに貼り付けることができます。</p>
+            
+            <div class="action-buttons" style="margin-bottom: 16px; margin-top: 0;">
+                <span id="copyToast">✔ クリップボードにコピーしました！</span>
+                <button class="btn btn-success" onclick="copyTable()">📄 表をコピーする</button>
+            </div>
+
+            <div id="resultArea"></div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-outline" onclick="backToStep2()">マッピングをやり直す</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<footer>
+    <div>&copy; 2026 hillvill | 無料・商用利用可能／無断転載・改変禁止（noteまでご連絡ください）</div>
+</footer>
+
+<script>
+// ==========================================
+// 💡 セキュリティ対策：HTMLエスケープ関数
+// ==========================================
+function escapeHtml(unsafe) {
+    if (!unsafe || typeof unsafe !== 'string') return "";
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
+let globalOldData = [];
+let globalNewData = [];
+
+function showStep(stepId) {
+    document.querySelectorAll('.step-section').forEach(el => el.classList.remove('active'));
+    document.getElementById(stepId).classList.add('active');
+    window.scrollTo(0, 0);
+}
+function backToStep1() { showStep('step1'); }
+function backToStep2() { showStep('step2'); checkDuplicates(); }
+
+async function extractTextFromDocx(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.convertToHtml({arrayBuffer: arrayBuffer});
+    let htmlText = result.value;
+    
+    htmlText = htmlText.replace(/<br\s*\/?>/gi, '\n');
+    htmlText = htmlText.replace(/<\/p>/gi, '\n');
+    
+    let rawText = htmlText.replace(/<[^>]+>/g, '');
+    return rawText;
+}
+
+// ＝ 文書解析（条項番号はテキストに残したまま保存する） ＝
+function parseDocument(rawText, style) {
+    rawText = rawText.replace(/[\v\u000B\u2028\u2029]/g, '\n');
+    
+    const lines = rawText.split('\n').map(l => l.trim()).filter(l => l !== "");
+    const result = [];
+    let curArtNum = "前文", curArtTitle = "", curParaNum = "-", curText = "";
+    let hasExplicitPara1 = false;
+    let paraRegex = (style === "circled") ? /^([①-⑳])/ : /^([1-9１-９][．\.]?)[ \t　]/;
+
+    function normalizeArtNum(str) {
+        if (!str) return "";
+        let s = str.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+        if (/^[0-9]+$/.test(s)) return s;
+        const kanjiMap = {'一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9};
+        let total = 0, current = 0;
+        for (let i = 0; i < s.length; i++) {
+            let c = s[i];
+            if (kanjiMap[c]) { current = kanjiMap[c]; }
+            else if (c === '十') { total += (current === 0 ? 1 : current) * 10; current = 0; }
+            else if (c === '百') { total += (current === 0 ? 1 : current) * 100; current = 0; }
+            else if (c === '千') { total += (current === 0 ? 1 : current) * 1000; current = 0; }
+        }
+        total += current;
+        return total > 0 ? total.toString() : s;
+    }
+
+    function normalizeParaNum(str) {
+        let s = str.replace(/[．\.\s　]/g, '');
+        if (/^[①-⑳]$/.test(s)) {
+            return (s.charCodeAt(0) - 0x2460 + 1).toString();
+        }
+        return s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+    }
+
+    for (let line of lines) {
+        if (line.includes("附則") || line.includes("改訂履歴")) break;
+
+        const artMatch = line.match(/^第\s*([0-9０-９一二三四五六七八九十百千]+)\s*条(?![にのをはがでと])(?:\s*[（(【](.+?)[）)】])?/);
+        if (artMatch) {
+            let extractedTitle = "";
+            if (curText) {
+                const prevLines = curText.split('\n');
+                const lastLine = prevLines[prevLines.length - 1];
+                const titleOnlyMatch = lastLine.match(/^[(（【](.+?)[)）】]$/);
+                
+                if (titleOnlyMatch && lastLine.length < 30) {
+                    extractedTitle = titleOnlyMatch[1];
+                    prevLines.pop();
+                    curText = prevLines.join('\n');
+                }
+                
+                if (curText.trim() !== "") {
+                    result.push({ artNum: curArtNum, artTitle: curArtTitle, paraNum: curParaNum, text: curText });
+                }
+            }
+            curArtNum = normalizeArtNum(artMatch[1]);
+            curArtTitle = artMatch[2] || extractedTitle || "";
+            curParaNum = "1";
+            curText = line;
+            hasExplicitPara1 = false;
+            continue;
+        }
+
+        const paraMatch = line.match(paraRegex);
+        if (paraMatch && curArtNum !== "前文") {
+            let newParaNum = normalizeParaNum(paraMatch[1]);
+
+            if (newParaNum === "1" && !hasExplicitPara1) {
+                curText += "\n" + line;
+                hasExplicitPara1 = true;
+                continue;
+            }
+
+            if (curText.trim() !== "") {
+                result.push({ artNum: curArtNum, artTitle: curArtTitle, paraNum: curParaNum, text: curText });
+            }
+            curParaNum = newParaNum;
+            curText = line;
+            continue;
+        }
+        curText += (curText ? "\n" : "") + line;
+    }
+    if (curText.trim() !== "") result.push({ artNum: curArtNum, artTitle: curArtTitle, paraNum: curParaNum, text: curText });
+
+    // --- 「後文」分離処理 ---
+    if (result.length > 0) {
+        let lastItem = result[result.length - 1];
+        let documentLines = lastItem.text.split('\n');
+        let splitIndex = -1;
+
+        for (let i = 0; i < documentLines.length; i++) {
+            if (documentLines[i].includes("を証するため") || documentLines[i].includes("の証として")) {
+                splitIndex = i;
+                break;
+            }
+        }
+
+        if (splitIndex !== -1) {
+            let articleLines = documentLines.slice(0, splitIndex);
+            let closingLines = documentLines.slice(splitIndex);
+
+            lastItem.text = articleLines.join('\n').trim();
+            
+            if (lastItem.text === "") {
+                 result.pop();
+            }
+
+            result.push({
+                artNum: "後文",
+                artTitle: "",
+                paraNum: "-",
+                text: closingLines.join('\n').trim()
+            });
+        }
+    }
+
+    return result;
+}
+
+function cleanString(str) {
+    if (!str) return "";
+    let s = str.replace(/[（）()【】「」\s　、。，．,.]/g, '');
+    s = s.replace(/及び|および|並びに|ならびに|又は|または|若しくは|もしくは|但し|ただし|尚|なお|且つ|かつ|上|うえ/g, '');
+    return s;
+}
+
+function extractKanji(str) {
+    const match = str.match(/[\u4E00-\u9FFF]/g);
+    return match ? match.join('') : "";
+}
+
+function getSimilarity(s1, s2) {
+    if (!s1 && !s2) return 1;
+    if (!s1 || !s2) return 0;
+    const set1 = new Set(s1);
+    const set2 = new Set(s2);
+    let intersection = 0;
+    for (let char of set1) { if (set2.has(char)) intersection++; }
+    const union = set1.size + set2.size - intersection;
+    return intersection / union;
+}
+
+function autoMatchArticles() {
+    globalNewData.forEach(newItem => {
+        let bestMatchId = "";
+        let bestPriority = 99;
+        let bestScore = 0;
+
+        const newTitle = cleanString(newItem.artTitle);
+        const newBody = cleanString(newItem.text);
+        const newKanji = extractKanji(newBody);
+
+        for (let oldItem of globalOldData) {
+            if (newItem.artNum === "前文" && oldItem.artNum === "前文") {
+                bestPriority = 0;
+                bestMatchId = oldItem.id;
+                break;
+            }
+            
+            if (newItem.artNum === "後文" && oldItem.artNum === "後文") {
+                bestPriority = 0;
+                bestMatchId = oldItem.id;
+                break;
+            }
+            
+            if (newItem.artNum !== "前文" && oldItem.artNum !== "前文" && newItem.artNum !== "後文" && oldItem.artNum !== "後文") {
+                const oldTitle = cleanString(oldItem.artTitle);
+                const oldKanji = extractKanji(cleanString(oldItem.text));
+
+                let currentPriority = 99;
+                let currentScore = 0;
+
+                const titleSim = getSimilarity(newTitle, oldTitle);
+                const kanjiSim = getSimilarity(newKanji, oldKanji);
+
+                if (kanjiSim >= 0.95) {
+                    // 【優先度1（最強）】 本文（漢字）の一致度が「95%以上」
+                    currentPriority = 1;
+                    currentScore = kanjiSim;
+                } else if (newTitle && oldTitle && newTitle === oldTitle && kanjiSim >= 0.5 && newItem.paraNum === oldItem.paraNum) {
+                    // 【優先度2】 タイトル完全一致 ＆ 漢字一致度が「50%以上」 ＆ 項番号が同じ
+                    currentPriority = 2;
+                    currentScore = kanjiSim + 1; // 優先度内での確度を高めるため+1
+                } else if (kanjiSim >= 0.8) {
+                    // 【優先度3】 本文（漢字）の一致度が「80%以上（高）」
+                    currentPriority = 3;
+                    currentScore = kanjiSim;
+                } else if (newTitle && oldTitle && titleSim >= 0.6 && kanjiSim >= 0.5 && newItem.paraNum === oldItem.paraNum) {
+                    // 【優先度4】 タイトル60%以上一致 ＆ 漢字一致度が「50%以上」 ＆ 項番号が同じ
+                    currentPriority = 4;
+                    currentScore = titleSim + kanjiSim;
+                }
+
+                // 計算した優先度が今までより高ければ、ベストマッチを更新する
+                if (currentPriority < bestPriority || (currentPriority === bestPriority && currentScore > bestScore)) {
+                    bestPriority = currentPriority;
+                    bestScore = currentScore;
+                    bestMatchId = oldItem.id;
+                }
+            }
+        }
+        newItem.selectedOldId = bestMatchId;
+    });
+}
+
+async function startMapping() {
+    const oldFile = document.getElementById('oldFile').files[0];
+    const newFile = document.getElementById('newFile').files[0];
+    if (!oldFile || !newFile) return alert("両方のファイルを選択してください。");
+
+    const selectedStyle = document.getElementById('paraStyle').value;
+    try {
+        document.getElementById('step1').style.opacity = '0.5';
+        const oldRaw = await extractTextFromDocx(oldFile);
+        const newRaw = await extractTextFromDocx(newFile);
+        document.getElementById('step1').style.opacity = '1';
+        
+        globalOldData = parseDocument(oldRaw, selectedStyle).map((item, index) => ({ ...item, id: `old_${index}` }));
+        globalNewData = parseDocument(newRaw, selectedStyle).map((item, index) => ({ ...item, id: `new_${index}`, selectedOldId: "" }));
+
+        autoMatchArticles();
+        buildMappingUI();
+        showStep('step2');
+        checkDuplicates();
+    } catch (e) {
+        document.getElementById('step1').style.opacity = '1';
+        alert("エラー: " + e.message);
+    }
+}
+
+function buildMappingUI() {
+    let oldOptionsHtml = `<option value="">--- [ 新設 ] ---</option>`;
+    globalOldData.forEach(old => {
+        const artNumEsc = escapeHtml(old.artNum);
+        const artTitleEsc = escapeHtml(old.artTitle);
+        const paraNumEsc = escapeHtml(old.paraNum);
+
+        let label = "";
+        if (old.artNum === "前文") {
+            label = `前文（前文・タイトル等）`;
+        } else if (old.artNum === "後文") {
+            label = `後文（署名欄等）`;
+        } else {
+            label = `第${artNumEsc}条 ${artTitleEsc ? `(${artTitleEsc})` : ''} 第${paraNumEsc}項`;
+        }
+        oldOptionsHtml += `<option value="${old.id}">${label}</option>`;
+    });
+
+    let html = `<table>
+        <thead><tr>
+            <th style="width: 50%;">新版の条文（基準）</th>
+            <th style="width: 50%;">旧版の条文（紐付け）</th>
+        </tr></thead><tbody>`;
+
+    globalNewData.forEach((newItem, index) => {
+        const artNumEsc = escapeHtml(newItem.artNum);
+        const artTitleEsc = escapeHtml(newItem.artTitle);
+        const paraNumEsc = escapeHtml(newItem.paraNum);
+
+        let newLabel = "";
+        if (newItem.artNum === "前文") {
+            newLabel = `前文（前文・タイトル等）`;
+        } else if (newItem.artNum === "後文") {
+            newLabel = `後文（署名欄等）`;
+        } else {
+            newLabel = `第${artNumEsc}条 ${artTitleEsc ? `(${artTitleEsc})` : ''} 第${paraNumEsc}項`;
+        }
+        
+        const safeSnippet = escapeHtml(newItem.text.substring(0, 40));
+
+        html += `<tr>
+            <td><strong>${newLabel}</strong><br><small style="color:#777;">${safeSnippet}...</small></td>
+            <td>
+                <select class="mapping-select" id="select_${index}" onchange="markAsChanged(this)">
+                    ${oldOptionsHtml}
+                </select>
+            </td>
+        </tr>`;
+    });
+    html += `</tbody></table>`;
+    document.getElementById('mappingArea').innerHTML = html;
+
+    globalNewData.forEach((newItem, index) => {
+        if (newItem.selectedOldId) {
+            document.getElementById(`select_${index}`).value = newItem.selectedOldId;
+        }
+    });
+}
+
+function markAsChanged(selectElement) {
+    selectElement.classList.add('changed');
+    checkDuplicates();
+}
+
+function checkDuplicates() {
+    const counts = {};
+    globalNewData.forEach((_, index) => {
+        const sel = document.getElementById(`select_${index}`);
+        sel.classList.remove('duplicate');
+        const val = sel.value;
+        if (val) counts[val] = (counts[val] || 0) + 1;
+    });
+
+    let hasDupes = false;
+    globalNewData.forEach((_, index) => {
+        const sel = document.getElementById(`select_${index}`);
+        const val = sel.value;
+        if (val && counts[val] > 1) {
+            sel.classList.add('duplicate');
+            hasDupes = true;
+        }
+    });
+
+    document.getElementById('duplicateWarning').style.display = hasDupes ? 'block' : 'none';
+
+    updateSuggestions();
+}
+
+// 提案ロジック
+function updateSuggestions() {
+    const usedOldIds = new Set();
+    globalNewData.forEach((_, i) => {
+        const val = document.getElementById(`select_${i}`).value;
+        if (val) usedOldIds.add(val);
+    });
+
+    const unusedOldItems = globalOldData.filter(o => !usedOldIds.has(o.id));
+    let html = "";
+
+    unusedOldItems.forEach(old => {
+        let hint = "";
+        let foundHint = false;
+
+        // 未紐付けの新条文から、条件に合うものを探す
+        globalNewData.forEach((newItem, i) => {
+            const isUnlinked = !document.getElementById(`select_${i}`).value;
+            if (isUnlinked && !foundHint) {
+                const oldTitle = cleanString(old.artTitle);
+                const newTitle = cleanString(newItem.artTitle);
+                const titleSim = getSimilarity(oldTitle, newTitle);
+                
+                // 【条件】タイトルが60%（0.6）以上一致 ＆ 項番号が同じ
+                if (oldTitle && newTitle && titleSim >= 0.6 && newItem.paraNum === old.paraNum) {
+                    let newLabel = "";
+                    if (newItem.artNum === "前文") {
+                        newLabel = "前文";
+                    } else if (newItem.artNum === "後文") {
+                        newLabel = "後文（署名欄等）";
+                    } else {
+                        newLabel = `第${escapeHtml(newItem.artNum)}条 ${escapeHtml(newItem.artTitle ? `(${newItem.artTitle})` : "")} 第${escapeHtml(newItem.paraNum)}項`;
+                    }
+                    hint = `<br><span style="color:#0284C7; font-weight:bold;">💡 もしかして：</span> 新版の「${newLabel}」と一致している可能性があります。`;
+                    foundHint = true;
+                }
+            }
+        });
+
+        // 削除される旧条文の表示ラベル
+        let oldLabel = "";
+        if (old.artNum === "前文") {
+            oldLabel = "前文";
+        } else if (old.artNum === "後文") {
+            oldLabel = "後文（署名欄等）";
+        } else {
+            oldLabel = `第${escapeHtml(old.artNum)}条 ${escapeHtml(old.artTitle ? `(${old.artTitle})` : "")} 第${escapeHtml(old.paraNum)}項`;
+        }
+        
+        // 削除がある場合は一律表示（1枠）、ヒントがあれば合体させる
+        html += `<div class="suggestion-item">旧版の「${oldLabel}」が選択されていません。このまま出力すると「削除条文」として出力されます。${hint}</div>`;
+    });
+
+    document.getElementById('suggestionArea').innerHTML = html;
+}
+
+function generateFinalTable() {
+    const usedOldIds = new Set();
+    let expectedOldIndex = 0;
+
+    globalNewData.forEach((newItem, index) => {
+        const selectedVal = document.getElementById(`select_${index}`).value;
+        newItem.selectedOldId = selectedVal;
+        if (selectedVal) usedOldIds.add(selectedVal);
+    });
+
+    let html = `<table>
+        <thead>
+            <tr>
+                <th class="col-num">条(新)</th>
+                <th class="col-num">項(新)</th>
+                <th class="col-text">新版</th>
+                <th class="col-num">条(旧)</th>
+                <th class="col-num">項(旧)</th>
+                <th class="col-text">旧版</th>
+                <th class="col-type">変更種類</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    const stripWhitespace = (str) => {
+        if (!str) return "";
+        return str.replace(/[\s\u3000\xA0\u200B-\u200D\uFEFF]/g, '');
+    };
+
+    const removeLeadingIdentifiersForEval = (text) => {
+        let s = text.trim();
+        s = s.replace(/^第\s*[0-9０-９一二三四五六七八九十百千]+\s*条\s*/, '');
+        s = s.replace(/^[1-9１-９][．\.]?\s+/, '');
+        s = s.replace(/^[①-⑳]\s*/, '');
+        return s;
+    };
+
+    const normalizeNotation = (str) => {
+        if (!str) return "";
+        let s = str;
+        s = s.replace(/及び/g, 'および').replace(/並びに/g, 'ならびに')
+             .replace(/又は/g, 'または').replace(/若しくは/g, 'もしくは')
+             .replace(/但し/g, 'ただし').replace(/且つ/g, 'かつ')
+             .replace(/尚/g, 'なお').replace(/上/g, 'うえ');
+        s = s.replace(/[、。，．,.]/g, '');
+        s = s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+        s = s.replace(/[一二三四五六七八九十百千]+/g, function(match) {
+            const kanjiMap = {'一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9};
+            let total = 0, current = 0;
+            for (let i = 0; i < match.length; i++) {
+                let c = match[i];
+                if (kanjiMap[c]) {
+                    current = kanjiMap[c];
+                } else if (c === '十') {
+                    total += (current === 0 ? 1 : current) * 10; current = 0;
+                } else if (c === '百') {
+                    total += (current === 0 ? 1 : current) * 100; current = 0;
+                } else if (c === '千') {
+                    total += (current === 0 ? 1 : current) * 1000; current = 0;
+                }
+            }
+            total += current;
+            return total > 0 ? total.toString() : match;
+        });
+        return s;
+    };
+
+    const maskReferences = (str) => {
+        if (!str) return "";
+        return str.replace(/第[0-9]+(条|項|号)/g, '第X$1');
+    };
+
+    globalNewData.forEach((newItem, index) => {
+        const selectedVal = newItem.selectedOldId;
+        let mappedOldIndex = -1;
+        
+        // 紐づいている旧版のインデックス（何番目か）を取得
+        if (selectedVal) {
+            mappedOldIndex = globalOldData.findIndex(o => o.id === selectedVal);
+        }
+
+        if (mappedOldIndex !== -1) {
+            for (let i = expectedOldIndex; i < mappedOldIndex; i++) {
+                if (!usedOldIds.has(globalOldData[i].id)) {
+                    const oldTextHtml = `<span class="del">${formatText(globalOldData[i].text)}</span>`;
+                    html += createRow("-", "-", "", globalOldData[i].artNum, globalOldData[i].paraNum, oldTextHtml, `<span class="type-del">削除</span>`);
+                }
+            }
+            expectedOldIndex = Math.max(expectedOldIndex, mappedOldIndex + 1);
+        }
+
+        if (newItem.selectedOldId) {
+            const oldItem = globalOldData.find(o => o.id === newItem.selectedOldId);
+            
+            let typeLabel = "";
+            let diffNewHtml = "";
+            let diffOldHtml = "";
+
+            if (stripWhitespace(oldItem.text) === stripWhitespace(newItem.text)) {
+                typeLabel = `<span class="type-keep">維持</span>`;
+                diffNewHtml = formatText(newItem.text);
+                diffOldHtml = formatText(oldItem.text);
+            } else {
+                const diffHtml = computeDiff(oldItem.text, newItem.text);
+                diffNewHtml = diffHtml.newHtml;
+                diffOldHtml = diffHtml.oldHtml;
+
+                const oldEvalText = removeLeadingIdentifiersForEval(oldItem.text);
+                const newEvalText = removeLeadingIdentifiersForEval(newItem.text);
+
+                const oldRaw = stripWhitespace(oldEvalText);
+                const newRaw = stripWhitespace(newEvalText);
+
+                if (oldRaw === newRaw) {
+                    typeLabel = `<span class="type-keep">維持<br><small style="font-weight:normal; color:#555;">(軽微修正)</small></span>`;
+                } else {
+                    const oldNorm = normalizeNotation(oldRaw);
+                    const newNorm = normalizeNotation(newRaw);
+                    const oldMasked = maskReferences(oldNorm);
+                    const newMasked = maskReferences(newNorm);
+
+                    if (oldMasked === newMasked) {
+                        typeLabel = `<span class="type-keep">維持<br><small style="font-weight:normal; color:#555;">(軽微修正)</small></span>`;
+                    } else {
+                        typeLabel = `<span class="type-mod">変更</span>`;
+                    }
+                }
+            }
+
+            html += createRow(newItem.artNum, newItem.paraNum, diffNewHtml, oldItem.artNum, oldItem.paraNum, diffOldHtml, typeLabel);
+        } else {
+            const newTextHtml = `<span class="ins">${formatText(newItem.text)}</span>`;
+            html += createRow(newItem.artNum, newItem.paraNum, newTextHtml, "-", "-", "", `<span class="type-new">新設</span>`);
+        }
+    });
+
+    for (let i = expectedOldIndex; i < globalOldData.length; i++) {
+        if (!usedOldIds.has(globalOldData[i].id)) {
+            const oldTextHtml = `<span class="del">${formatText(globalOldData[i].text)}</span>`;
+            html += createRow("-", "-", "", globalOldData[i].artNum, globalOldData[i].paraNum, oldTextHtml, `<span class="type-del">削除</span>`);
+        }
+    }
+
+    html += `</tbody></table>`;
+    document.getElementById('resultArea').innerHTML = html;
+    document.getElementById('copyToast').style.display = 'none';
+    showStep('step3');
+}
+
+function computeDiff(oldText, newText) {
+    const diff = Diff.diffChars(oldText, newText);
+    const cleaned = diff.filter(part => part.value.length > 0);
+    
+    let oldHtml = "";
+    let newHtml = "";
+    
+    let isInChangeBlock = false;
+    let tempOld = "";
+    let tempNew = "";
+    const MERGE_THRESHOLD = 4;
+
+    for (let i = 0; i < cleaned.length; i++) {
+        let part = cleaned[i];
+
+        if (part.added || part.removed) {
+            isInChangeBlock = true;
+            if (part.added) tempNew += part.value;
+            if (part.removed) tempOld += part.value;
+        } else {
+            let isShort = part.value.length <= MERGE_THRESHOLD;
+            
+            let hasFutureChange = false;
+            for (let j = i + 1; j < cleaned.length; j++) {
+                if (cleaned[j].added || cleaned[j].removed) {
+                    hasFutureChange = true;
+                    break;
+                }
+                if (!cleaned[j].added && !cleaned[j].removed && cleaned[j].value.length > MERGE_THRESHOLD) {
+                    break;
+                }
+            }
+
+            if (isInChangeBlock && isShort && hasFutureChange) {
+                tempOld += part.value;
+                tempNew += part.value;
+            } else {
+                if (isInChangeBlock) {
+                    if (tempOld) oldHtml += `<span class="del">${formatText(tempOld)}</span>`;
+                    if (tempNew) newHtml += `<span class="ins">${formatText(tempNew)}</span>`;
+                    tempOld = "";
+                    tempNew = "";
+                    isInChangeBlock = false;
+                }
+                let safeValue = formatText(part.value);
+                oldHtml += safeValue;
+                newHtml += safeValue;
+            }
+        }
+    }
+    
+    if (isInChangeBlock) {
+        if (tempOld) oldHtml += `<span class="del">${formatText(tempOld)}</span>`;
+        if (tempNew) newHtml += `<span class="ins">${formatText(tempNew)}</span>`;
+    }
+
+    return { oldHtml, newHtml };
+}
+
+function createRow(newArt, newPara, newCell, oldArt, oldPara, oldCell, type) {
+    return `<tr>
+        <td class="col-num">${escapeHtml(String(newArt || ""))}</td>
+        <td class="col-num">${escapeHtml(String(newPara || ""))}</td>
+        <td>${newCell}</td>
+        <td class="col-num">${escapeHtml(String(oldArt || ""))}</td>
+        <td class="col-num">${escapeHtml(String(oldPara || ""))}</td>
+        <td>${oldCell}</td>
+        <td class="col-type">${type}</td>
+    </tr>`;
+}
+
+function formatText(text) {
+    return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
+function copyTable() {
+    const table = document.querySelector("#resultArea table");
+    if (!table) return;
+    const range = document.createRange();
+    range.selectNode(table);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    try {
+        document.execCommand('copy');
+        const toast = document.getElementById('copyToast');
+        toast.style.display = 'inline-block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    } catch (err) {
+        alert("コピーに失敗しました。");
+    }
+    selection.removeAllRanges();
+}
+</script>
+</body>
+</html>
