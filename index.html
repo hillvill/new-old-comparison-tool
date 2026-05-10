@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>新旧対照表作成ツール</title>
 	<meta name="description" content="法務・総務担当者向け。Wordファイル（.docx）を2つ読み込むだけで、精度の高い新旧対照表を自動生成します。すべての処理がブラウザ内で完結する無料ツールです。">
-    <meta name="keywords" content="新旧対照表, 自動作成, 法務, 契約書, ツール, 無料, ローカル処理">
+    <meta name="keywords" content="新旧対照表, 自動作成, 法務, 契約書, 社内規定, 社内規則, ツール, 無料, フリー, ローカル処理, 安全">
     <meta property="og:title" content="新旧対照表作成ツール | ブラウザ完結・完全無料の法務DX">
-    <meta property="og:description" content="Wordファイルを読み込むだけで新旧対照表を自動生成。外部サーバーへの送信ゼロも安心です。">
+    <meta property="og:description" content="Wordファイルを読み込むだけで新旧対照表を自動生成。法務・総務担当者の業務効率化に最適。">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://hillvill.github.io/new-old-comparison-tool/">
     <meta property="og:site_name" content="hillvill's Legal Tech Tools">
@@ -129,7 +129,7 @@
         
         /* --- ボタン関連 --- */
         .btn {
-            background-color: #475569; /* スレートグレー */
+            background-color: #475569; 
             color: white;
             border: 1px solid transparent;
             padding: 11px 24px;
@@ -143,7 +143,7 @@
         .btn:hover { background-color: #334155; }
         
         .btn-success {
-            background-color: #2563EB; /* クールブルー */
+            background-color: #2563EB; 
         }
         .btn-success:hover { background-color: #1D4ED8; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2); }
         
@@ -162,15 +162,33 @@
 
         /* ヒントメッセージ用 */
         .suggestion-item {
-            background-color: #F0F9FF; /* 淡いブルー */
-            color: #0369A1; /* 濃いブルー */
+            background-color: #F0F9FF; 
+            color: #0369A1; 
             padding: 16px;
             border-left: 4px solid #0EA5E9;
             margin-top: 16px;
-            border-radius: 8px; /* カードに合わせて丸みを持たせる */
+            border-radius: 8px; 
             font-size: 14px;
             line-height: 1.6;
-            box-shadow: 0 2px 4px -1px rgba(0,0,0,0.05); /* 枠外用の軽い影 */
+            box-shadow: 0 2px 4px -1px rgba(0,0,0,0.05); 
+        }
+
+        /* 受け入れるボタンのスタイル */
+        .suggest-btn {
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            color: #0369A1;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 12px;
+            transition: 0.2s;
+        }
+        .suggest-btn:hover {
+            background-color: #e0f2fe;
+            border-color: #93c5fd;
         }
         
         /* テーブルスタイル */
@@ -218,7 +236,7 @@
 
 <div class="header-bar">
     <div class="header-title">新旧対照表作成ツール</div>
-    <div class="version-badge">V1.00 (BETA)</div>
+    <div class="version-badge">V1.10 (BETA)</div>
 </div>
 
 <div class="container">
@@ -370,7 +388,7 @@ async function extractTextFromDocx(file) {
     return rawText;
 }
 
-// ＝ 文書解析（条項番号はテキストに残したまま保存する） ＝
+// ＝ 文書解析 ＝
 function parseDocument(rawText, style) {
     rawText = rawText.replace(/[\v\u000B\u2028\u2029]/g, '\n');
     
@@ -722,7 +740,8 @@ function updateSuggestions() {
                     } else {
                         newLabel = `第${escapeHtml(newItem.artNum)}条 ${escapeHtml(newItem.artTitle ? `(${newItem.artTitle})` : "")} 第${escapeHtml(newItem.paraNum)}項`;
                     }
-                    hint = `<br><span style="color:#0284C7; font-weight:bold;">💡 もしかして：</span> 新版の「${newLabel}」と一致している可能性があります。`;
+                    hint = `<br><span style="color:#0284C7; font-weight:bold;">💡 もしかして：</span> 新版の「${newLabel}」と一致している可能性があります。
+<button type="button" class="suggest-btn" onclick="acceptSuggestion(${i}, '${old.id}')">受け入れる</button>`;
                     foundHint = true;
                 }
             }
@@ -743,6 +762,25 @@ function updateSuggestions() {
     });
 
     document.getElementById('suggestionArea').innerHTML = html;
+}
+
+// --- 「受け入れる」ボタンを押した時の処理 ---
+function acceptSuggestion(newIndex, oldId) {
+    const selectEl = document.getElementById(`select_${newIndex}`);
+    if (selectEl) {
+        selectEl.value = oldId; 
+        markAsChanged(selectEl); 
+        
+        // 変更された箇所が分かりやすいように一瞬だけ黄色く光らせる
+        selectEl.style.backgroundColor = "#fef08a";
+        setTimeout(() => { 
+            if (selectEl.classList.contains('changed')) {
+                selectEl.style.backgroundColor = "#F1F5F9"; 
+            } else {
+                selectEl.style.backgroundColor = "";
+            }
+        }, 1000);
+    }
 }
 
 function generateFinalTable() {
